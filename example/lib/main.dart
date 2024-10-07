@@ -1,11 +1,12 @@
 import 'dart:developer';
 import 'dart:io';
 
+import 'package:commonui/commonui.dart';
 import 'package:flutter/material.dart';
-import 'package:scanwedge/models/barcode_plugin.dart';
 import 'package:scanwedge/scanwedge.dart';
 
 void main() {
+  CommonLogger.initializeLogger(logName: 'MDMDevice', logLevel: ClassLoggerLevel.debug);
   runApp(const MyApp());
 }
 
@@ -16,7 +17,7 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with ClassLogger {
   Scanwedge? _scanwedgePlugin;
   String? _deviceInfo;
   final notifierDisableKeystroke = ValueNotifier(true);
@@ -25,43 +26,78 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    Scanwedge.initialize().then((scanwedge) {
-      _scanwedgePlugin = scanwedge;
-      setState(() {});
-      scanwedge.getDeviceInfo().then((devInfo) => setState(() {
-            _deviceInfo = devInfo;
-          }));
-    });
+    try {
+      Scanwedge.initialize().then((scanwedge) {
+        _scanwedgePlugin = scanwedge;
+        setState(() {});
+        scanwedge.getDeviceInfo().then((devInfo) => setState(() {
+              _deviceInfo = devInfo;
+            }));
+      });
+    } catch (e) {
+      log('initState Exception: $e');
+    }
   }
 
   _createProfile() async {
-    log('_createProfile()-${await _scanwedgePlugin?.createProfile(
-      ScanProfile(
-        profileName: 'TestProfile',
-        disableKeystroke: notifierDisableKeystroke.value,
-        packageNames: ['no.talgoe.scanwedge.scanwedge_example'],
-        barcodePlugin: BarcodePlugin(
-          aimType: notifierAimType.value,
-          // enabledBarcodes: [BarcodeLabelType.labelTypeCode39, BarcodeLabelType.labelTypeCode93],
-        ),
-      ),
-    )}');
+    try {
+      log('_createProfile()-${await _scanwedgePlugin?.createScanProfile(_scanwedgePlugin?.manufacturer == 'ZEBRA' ? ZebraProfileModel(profileName: 'DemoProfile', enabledBarcodes: [
+            BarcodeConfig(barcodeType: BarcodeTypes.code39),
+            BarcodeConfig(barcodeType: BarcodeTypes.code128),
+            BarcodeConfig(barcodeType: BarcodeTypes.ean8),
+            BarcodeConfig(barcodeType: BarcodeTypes.ean13),
+            BarcodeConfig(barcodeType: BarcodeTypes.i2of5),
+          ], enableKeyStroke: !notifierDisableKeystroke.value, aimType: notifierAimType.value) : ProfileModel(profileName: 'DemoProfile', enabledBarcodes: [
+              BarcodeTypes.code128.create(),
+            ]))}');
+    } catch (e) {
+      log('_createProfile Exception: $e');
+    }
+  }
+
+  _triggerScan() async {
+    try {
+      log('_triggerScan()-${await _scanwedgePlugin?.toggleScanning()}');
+    } catch (e) {
+      log('_triggerScan Exception: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    logD('build', 'build');
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Plugin example app'),
           actions: [
-            IconButton(
-                onPressed: () => debugPrint('${BarcodePlugin(
-                      disabledBarcodes: [BarcodeLabelType.labelTypeCode11, BarcodeLabelType.labelTypeCode128],
-                      // enabledBarcodes: [BarcodeLabelType.labelTypeCode39, BarcodeLabelType.labelTypeCode93],
-                    )..toMap}'),
-                icon: const Icon(Icons.bathtub)),
-            IconButton(onPressed: () => exit(0), icon: const Icon(Icons.exit_to_app)),
+            PopupMenuButton(
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'trigger',
+                  child: Text('Trigger scan'),
+                ),
+                const PopupMenuItem(
+                  value: 'enable',
+                  child: Text('Enable scanner'),
+                ),
+                const PopupMenuItem(
+                  value: 'disable',
+                  child: Text('Disable scanner'),
+                ),
+                const PopupMenuItem(
+                  value: 'exit',
+                  child: Text('Exit application'),
+                ),
+              ],
+              onSelected: (value) => switch (value) {
+                'trigger' => _triggerScan(),
+                'enable' => _scanwedgePlugin?.enableScanner(),
+                'disable' => _scanwedgePlugin?.disableScanner(),
+                'exit' => exit(0),
+                _ => null,
+              },
+            ),
           ],
         ),
         body: Column(
@@ -89,8 +125,9 @@ class _MyAppState extends State<MyApp> {
                             const SizedBox(width: 5),
                             ValueListenableBuilder(
                                 valueListenable: notifierDisableKeystroke,
-                                builder: (context, disableKeyboard, _) =>
-                                    Switch(value: disableKeyboard, onChanged: (value) => notifierDisableKeystroke.value = value)),
+                                builder: (context, disableKeyboard, _) => Switch(
+                                    value: disableKeyboard,
+                                    onChanged: (value) => notifierDisableKeystroke.value = value)),
                           ],
                         ),
                         ValueListenableBuilder(
@@ -109,17 +146,23 @@ class _MyAppState extends State<MyApp> {
                                     decoration: BoxDecoration(
                                         color: Colors.blue,
                                         borderRadius: BorderRadius.circular(5),
-                                        boxShadow: const [BoxShadow(offset: Offset(2, 2), blurRadius: 1, color: Colors.black54)]),
+                                        boxShadow: const [
+                                          BoxShadow(offset: Offset(2, 2), blurRadius: 1, color: Colors.black54)
+                                        ]),
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text('AimType:',
-                                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white)),
+                                            style:
+                                                Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white)),
                                         Padding(
                                           padding: const EdgeInsets.only(left: 6.0),
                                           child: Text(aimType.toString().split('.').last,
-                                              style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white)),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleLarge
+                                                  ?.copyWith(color: Colors.white)),
                                         ),
                                       ],
                                     ),
@@ -135,7 +178,8 @@ class _MyAppState extends State<MyApp> {
             )),
             TextFormField(
               decoration: const InputDecoration(
-                  hintText: 'auto inserted if keystroke and focused', contentPadding: EdgeInsets.symmetric(horizontal: 6)),
+                  hintText: 'auto inserted if keystroke and focused',
+                  contentPadding: EdgeInsets.symmetric(horizontal: 6)),
             ),
             const Expanded(child: SizedBox()),
             Card(
