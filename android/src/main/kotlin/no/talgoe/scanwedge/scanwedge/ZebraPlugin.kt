@@ -132,6 +132,10 @@ class ZebraPlugin(private val scanW: ScanwedgePlugin, private val log: Logger?) 
       val bParams = Bundle()
       bParams.putString("scanner_selection","auto")
       bParams.putString("scanner_input_enabled","true")
+      // Added support for inverted barcodes
+      bParams.putString("inverse_1d_mode","2")
+      bParams.putString("decoder_upca_preamble","1")
+          
       val sAimType=convertAimTypeToIndex(zebraConfig?.get("aimType") as? String)
       if(sAimType!=null){
         log?.i(TAG, "createProfile: aimType set: $sAimType")
